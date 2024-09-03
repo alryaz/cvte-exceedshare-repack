@@ -136,7 +136,6 @@ jobs:
         
         echo "::group::Prepare output files"
         dpkg -b unpacked "${{ steps.vars.outputs.file }}"
-        sha256sum "${{ steps.vars.outputs.file }}" > "${{ steps.vars.outputs.file }}.sha256"
         echo "::endgroup::"
 
     - name: Upload artifacts
@@ -144,9 +143,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.vars.outputs.artifact }}
-        path: |
-          ${{ steps.vars.outputs.file }}
-          ${{ steps.vars.outputs.file }}.sha256
+        path: ${{ steps.vars.outputs.file }}
 
 
   define-upload-matrix:
@@ -164,32 +161,21 @@ jobs:
       - name: List .deb files and extract versions
         id: extract
         run: |
-          echo "::group::Extract version numbers"
-          versions=()
           mkdir -p release
-          latdir="release/${{ env.PERMANENT_RELEASE }}"
+          release() {
+            echo "::group::Copy $1 to release/$2/$3"
+            mkdir -p "release/$2"
+            cp "$1" "release/$2/$3"
+            (cd "$1" && sha256sum "$3" > "$3.sha256")
+            echo "::endgroup::"
+          }
           for file in $(find artifacts -name "*.deb"); do
             # Extract the version using basename and cut
             filename=$(basename "$file")
             version="$(echo "$filename" | rev | cut -d'_' -f2 | rev)"
-            latest="$latdir/${filename/_${version}_/_latest_}"
-
-            # @TODO: compare versions
-            if [ -f "$latest" ]; then
-              echo "WARNING: Conflicting files on latest/$filename"
-            else
-              mkdir -p "$latdir"
-              echo "Copying $file to ${{ env.PERMANENT_RELEASE }}"
-              cp "$file" "$latest"
-              (cd $latdir && sha256sum "$latest" > $latest.sha256)
-            fi
-
-            mkdir -p "release/$version"
-            echo "Copying $file to $version"
-            cp "$file" "release/$version/$filename"
+            release "$file" "$version" "$filename"
+            release "$file" "${{ env.PERMANENT_RELEASE }}" "${filename/_${version}_/_latest_}"
           done
-          echo "::endgroup::"
-
           echo "versions=$(ls release | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
 
       - name: Upload artifacts
