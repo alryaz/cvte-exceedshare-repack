@@ -99,8 +99,10 @@ jobs:
 
     - name: Download instead of building
       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing == 'false' && github.event.inputs.download_existing != 'false' && steps.check.outputs.exists == 'true' }}
-      id: simulate
-      run: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
+      id: latest
+      uses: nick-fields/retry@v3
+      with:
+        command: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
 
     - name: Download package from repository
       if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing != 'false') || steps.check.outputs.exists == 'false' }}
@@ -109,11 +111,11 @@ jobs:
       with:
         timeout_minutes: 3
         max_attempts: 5
-        command: curl -L -o "${{ matrix.item.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.item.path }}"
+        command: curl -fL -o "${{ matrix.item.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.item.path }}"
 
     - name: Rebuild package
       id: rebuild
-      if: ${{ steps.download.result != 'skipped' }}
+      if: ${{ steps.download.result == 'success' }}
       run: |
         echo "::group::Extract package contents to a temporary directory"
         mkdir -p unpacked
@@ -150,7 +152,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload artifacts
-      if: ${{ steps.job-id.result != 'skipped' }}
+      if: ${{ steps.download.result == 'success' || steps.latest.result == 'success' }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.vars.outputs.artifact }}
