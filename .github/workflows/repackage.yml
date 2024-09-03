@@ -85,7 +85,7 @@ jobs:
               echo "$var=false" >> $GITHUB_OUTPUT
             fi
             echo "::endgroup::"
-          fi
+          done
         }
 
         check_exists "${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" "version"
