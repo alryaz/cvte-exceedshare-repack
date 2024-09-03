@@ -67,7 +67,12 @@ jobs:
       id: check
       run: |
         curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" && (
-          echo "exists='true'" >> $GITHUB_OUTPUT
+          curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/repository/${{ steps.vars.outputs.file }}" && (
+            echo "exists='true'" >> $GITHUB_OUTPUT
+          ) || (
+            curl -sL -o "${{ steps.vars.output.file }}" "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
+            echo "exists='part'" >> $GITHUB_OUTPUT
+          )
         ) || (
           echo "exists='false'" >> $GITHUB_OUTPUT
         )
@@ -105,9 +110,18 @@ jobs:
         # Rebuild package
         dpkg -b unpacked "${{ steps.vars.outputs.file }}"
 
-    - name: Release
+    - name: Release with version
       if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "${{ steps.vars.outputs.tag }}"
         files: "${{ steps.vars.outputs.file }}"
+        make_latest: false
+
+    - name: Release with repository
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' || steps.check.output_exists == 'part' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "repository"
+        files: "${{ steps.vars.outputs.file }}"
+        make_latest: true
