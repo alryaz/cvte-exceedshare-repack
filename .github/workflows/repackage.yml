@@ -209,21 +209,43 @@ jobs:
 
   create-repository:
     runs-on: ubuntu-latest
-    needs: handle-package
+    needs: upload-release
     name: Update APT repository
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - name: Checkout signing key
+        uses: actions/checkout@v4
         with:
-          name: release
+          ref: gh-pages
           path: release
+          sparse-checkout: 'signing-key.pub'
+          sparse-checkout-cone-mode: false
+          
+      - name: Download latest versions
+        uses: Itsblue/download-release-assets-action@v4
+        with:
+          files: "*.deb"
+          version: "tags/${{ env.PERMANENT_RELEASE }}"
+          path: release
+
+      - name: Prepare data
+        id: data
+        run: |
+          echo "architectures<<EOF" >> $GITHUB_OUTPUT
+          for file in release/*.deb; do
+              echo "$file" | rev | cut -d'_' -f1 | rev
+          done | sort | uniq >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo public<<EOF" >> $GITHUB_OUTPUT
+          cat release/signing-key.pub >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
       - uses: smeinecke/apt-repo-action@v2.1.4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           arch: ${{ steps.data.outputs.architectures }}
           version: debian
-          file: "release/${{ env.PERMANENT_RELEASE }}/*.deb"
+          file: "release/*.deb"
           file_target_version: debian
-          public_key: ${{ secrets.REPO_PUBLIC }}
+          public_key: ${{ steps.data.outputs.public }}
           private_key: ${{ secrets.REPO_PRIVATE }}
           key_passphrase: ${{ secrets.REPO_SECRET }}
