@@ -116,17 +116,19 @@ jobs:
       uses: svenstaro/upload-release-action@v2
       with:
         tag: "${{ steps.vars.outputs.tag }}"
-        files: "${{ steps.vars.outputs.file }}"
+        file: "${{ steps.vars.outputs.file }}"
         asset_name: "${{ steps.vars.outputs.file }}"
         make_latest: false
         overwrite: true
+        prerelease: true
 
     - name: Release with repository
       if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' || steps.check.output_exists == 'part' }}
       uses: svenstaro/upload-release-action@v2
       with:
         tag: "repository"
-        files: "${{ steps.vars.outputs.file }}"
+        file: "${{ steps.vars.outputs.file }}"
         asset_name: "${{ steps.vars.outputs.latest }}"
         make_latest: true
         overwrite: true
+        prerelease: false
