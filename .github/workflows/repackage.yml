@@ -101,6 +101,7 @@ jobs:
             find applications icons \
                 -type f \
                 -exec sh -c 'mkdir -p "unpacked/usr/share/$(dirname "{}")"' \; \
+                -exec echo 'Symlinking /opt/apps/${{ env.PACKAGE_NAME }}/{} to /usr/share/{}' \; \
                 -exec ln -s "/opt/apps/${{ env.PACKAGE_NAME }}/entries/{}" "unpacked/usr/share/{}" \;
         )
         
@@ -145,14 +146,14 @@ jobs:
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-          release_id: "${{ steps.vars.outputs.tag }}"
-          asset_name: "${{ steps.vars.outputs.file }}*"
+          release_id: "${{ env.PERMANENT_RELEASE }}"
+          asset_name: "${{ steps.vars.outputs.latest }}*"
 
     - name: Rename files
       if: ${{ steps.rebuild.result != 'skipped' }}
       run: |
         mv '${{ steps.vars.outputs.file }}' '${{ steps.vars.outputs.latest }}'
-        mv '${{ steps.vars.outputs.file }}.sha256' '${{ steps.vars.outputs.file }}.sha256'
+        mv '${{ steps.vars.outputs.file }}.sha256' '${{ steps.vars.outputs.latest }}.sha256'
 
     - name: Release with latest
       if: ${{ steps.rebuild.result != 'skipped' }}
