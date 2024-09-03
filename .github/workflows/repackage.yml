@@ -6,10 +6,13 @@ on:
 env:
   REPOSITORY_URL: "https://home-store-packages.uniontech.com/appstore"
   REPOSITORY_DIST: "eagle"
+  PACKAGE_NAME: com.cvte.exceedshare
 
 jobs:
-  download_package:
+  download-lists:
     runs-on: ubuntu-latest
+    outputs:
+      links: ${{ steps.links.outputs.links }}
     steps:
     - name: Download Release file
       run: |
@@ -28,21 +31,69 @@ jobs:
         while read source; do
           curl -sL "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/${source}"
         done < Sources > Packages
-    
+
+    - name: Store package laths
+      id: links
+      run: |
+        # Capture the output of the grep command
+        DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages)
+
+        # Convert the output to a JSON array
+        DEB_LINKS_JSON=$(echo "$DEB_LINKS" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+        # Set the output
+        echo "links=$DEB_LINKS_JSON" >> $GITHUB_OUTPUT
+
+  handle-package:
+    runs-on: ubuntu-latest
+    needs: download-lists
+    strategy:
+      matrix:
+        link: ${{ fromJSON(needs.download-lists.outputs.links) }}
+    steps:
+    - name: Store filename
+      id: filename
+      run: |
+        echo "filename=$(basename "${{ matrix.link }}")" >> $GITHUB_OUTPUT
+        
     - name: Download packages
       run: |
-        while read -r package; do
-          echo "Downloading package: ${package}"
-          curl -sL -o $(basename "${package}") "${{ env.REPOSITORY_URL }}/${package}"
-        done < <(grep -oE '[^ ]+com\.cvte\.exceedshare[^ ]+\.deb' Packages)
+        curl -sL -o "${{ steps.filename.outputs.filename }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
 
-    - name: Check if files are present
+    - name: Store package version
+      id: version
       run: |
-        ls *.deb >/dev/null || ( echo "No packages downloaded, check output" >&2; exit 1 )
- 
-    - name: Upload debian packages
-      uses: actions/upload-artifact@v4
+        echo "version=$(dpkg-deb -f "${{ steps.filename.outputs.filename }}")" >> $GITHUB_OUTPUT
+
+    - name: Rebuild packages
+      run: |
+        # Extract package contents to temporary directory
+        mkdir -p unpacked
+        dpkg-deb -x "${{ steps.filename.outputs.filename }}" unpacked
+        dpkg-deb --control "${{ steps.filename.outputs.filename }}" "unpacked/DEBIAN"
+        
+        # Remove obscure dependency
+        sed -i '/deepin-elf-verify/d' "unpacked/DEBIAN/control"
+        
+        # Make desktop shortcut and icons
+        (
+            cd "unpacked/opt/apps/${{ env.PACKAGE_NAME }}/entries"
+            find applications icons \
+                -type f \
+                -exec sh -c 'mkdir -p unpacked/usr/share/$(dirname "{}")"' \; \
+                -exec ln -s "/opt/apps/${{ env.PACKAGE_NAME }}/entries/{}" "unpacked/usr/share/{}" \;
+        )
+        
+        # Check if update-desktop-database trigger is present
+        if ! grep -q 'update-desktop-database' "unpacked/DEBIAN/postinst"; then
+            echo 'dpkg-trigger update-desktop-database' >> "unpacked/DEBIAN/postinst"
+        fi
+        
+        # Rebuild package
+        dpkg -b unpacked "${{ steps.filename.outputs.filename }}"
+
+    - name: Release
+      uses: softprops/action-gh-release@v2
       with:
-        name: packages
-        path: '*.deb'
-        overwrite: true
+        tag: "${{ env.PACKAGE_NAME }}-v${{ steps.version.outputs.version }}"
+        files: "${{ steps.filename.outputs.filename }}"
