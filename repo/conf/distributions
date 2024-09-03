@@ -1,0 +1,7 @@
+Description: alryaz/cvte-exceedshare-debian
+Codename: debian
+Architectures: amd64 arm64
+Components: main
+SignWith: A1AE9C3330928F410E9C7988093630F386533BAC
+
+
