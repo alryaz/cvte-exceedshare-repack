@@ -34,7 +34,7 @@ jobs:
         while read -r package; do
           echo "Downloading package: ${package}"
           curl -sL -o $(basename "${package}") "${{ env.REPOSITORY_URL }}/${package}"
-        done < <(grep -oE '[^ ]+com\.cvte\.exceedshare[^ ]+\.deb' Packages.*)
+        done < <(grep -oE '[^ ]+com\.cvte\.exceedshare[^ ]+\.deb' Packages)
     
     - name: Upload debian packages
       uses: actions/upload-artifact@v4
