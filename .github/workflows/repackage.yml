@@ -60,6 +60,7 @@ jobs:
           echo "file=${file}"
           echo "version=${version}"
           echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
+          echi "latest="${file/_${version}_/_latest_}"
         ) >> $GITHUB_OUTPUT
 
     - name: Check if release upload already exists
@@ -67,7 +68,7 @@ jobs:
       id: check
       run: |
         curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" && (
-          curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/repository/${{ steps.vars.outputs.file }}" && (
+          curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/repository/${{ steps.vars.outputs.latest }}" && (
             echo "exists='true'" >> $GITHUB_OUTPUT
           ) || (
             curl -sL -o "${{ steps.vars.output.file }}" "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
@@ -118,10 +119,15 @@ jobs:
         files: "${{ steps.vars.outputs.file }}"
         make_latest: false
 
+    - name: Rename to latest
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
+      run: |
+        mv "${{ steps.vars.output.file }}" "${{ steps.vars.output.latest }}"
+
     - name: Release with repository
       if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' || steps.check.output_exists == 'part' }}
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "repository"
-        files: "${{ steps.vars.outputs.file }}"
+        files: "${{ steps.vars.outputs.latest }}"
         make_latest: true
