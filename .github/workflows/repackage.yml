@@ -19,6 +19,7 @@ env:
 
 jobs:
   download-lists:
+    name: Find latest packages
     runs-on: ubuntu-latest
     outputs:
       links: ${{ steps.links.outputs.links }}
@@ -58,6 +59,7 @@ jobs:
 
 
   handle-package:
+    name: "Rebuild: ${{ matrix.link }}"
     runs-on: ubuntu-latest
     needs: download-lists
     strategy:
@@ -148,6 +150,7 @@ jobs:
 
 
   define-upload-matrix:
+    name: Define release versions
     runs-on: ubuntu-latest
     needs: handle-package
     outputs:
