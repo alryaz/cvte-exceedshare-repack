@@ -27,7 +27,7 @@ jobs:
       uses: nick-fields/retry@v3
       with:
         timeout_minutes: 3
-        max_attempts: 3
+        max_attempts: 5
         command: curl -fL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
         
     - name: Parse package sources
@@ -41,7 +41,7 @@ jobs:
       uses: nick-fields/retry@v3
       with:
         timeout_minutes: 3
-        max_attempts: 3
+        max_attempts: 5
         command: curl -L --parallel --parallel-immediate $(sed -e 's!^!${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/!g' Sources) > Packages
 
     - name: Store package laths
@@ -95,7 +95,7 @@ jobs:
       uses: nick-fields/retry@v3
       with:
         timeout_minutes: 3
-        max_attempts: 3
+        max_attempts: 5
         command: curl -L -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
 
     - name: Rebuild package
