@@ -69,37 +69,28 @@ jobs:
       id: vars
       run: |
         file="$(basename "${{ matrix.link }}")"
-        version="$(echo "${file}" | cut -d'_' -f2)"
+        version="$(echo "${file}" | rev | cut -d'_' -f2 | rev)"
         (
           echo "file=${file}"
           echo "version=${version}"
           echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
-          echo "latest=${file/_${version}_/_latest_}"
+          echo "artifact=file-$(echo "${file}" | sha256sum | cut -d' ' -f1)"
         ) >> $GITHUB_OUTPUT
 
     - name: Check if release upload already exists
-      id: exists
+      id: check
       run: |
-        check_exists() {
-          url="${{ github.server_url }}/${{ github.repository }}/releases/download/$1"
-          echo "$2_url=${url}" >> $GITHUB_OUTPUT
-          for postfix in "" ".sha256"; do
-            echo "::group::Checking if $1${postfix} item exists"
-            var="$2$(echo $postfix | tr . _)"
-            if curl -sL -o "$(basename "$1")${postfix}" "${url}${postfix}"; then
-              echo "$var=true" >> $GITHUB_OUTPUT
-            else
-              echo "$var=false" >> $GITHUB_OUTPUT
-            fi
-            echo "::endgroup::"
-          done
-        }
+        url="${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
+        echo "url=${url}" >> $GITHUB_OUTPUT
 
-        check_exists "${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" "version"
-        check_exists "${{ env.PERMANENT_RELEASE }}/${{ steps.vars.outputs.latest }}" "latest"
+        if curl -fLIZ "${url}" "${url}.sha256"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: Download package from repository
-      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.rebuild) || steps.exists.outputs.version == 'false' }}
+      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.rebuild) || steps.check.outputs.exists == 'false' }}
       id: download
       uses: nick-fields/retry@v3
       with:
@@ -145,68 +136,85 @@ jobs:
         dpkg -b unpacked "${{ steps.vars.outputs.file }}"
         sha256sum "${{ steps.vars.outputs.file }}" > "${{ steps.vars.outputs.file }}.sha256"
         echo "::endgroup::"
-      
-    - name: Release version tag
-      if: ${{ steps.rebuild.result != 'skipped' }}
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: "${{ steps.vars.outputs.tag }}"
-        files: |
-          ${{ steps.vars.outputs.file }}
-          ${{ steps.vars.outputs.file }}.sha256
-        make_latest: false
-        prerelease: true
-        overwrite: true
-        fail_on_unmatched_files: true
-
-    - name: Download release files (for existing builds)
-      if: ${{ steps.rebuild.result == 'skipped' && steps.exists.outputs.latest == 'false' }}
-      run: |
-        curl -fLZ -o '${{ steps.vars.outputs.latest }}' '${{ steps.vars.outputs.latest }}.sha256' \
-          "${{ steps.exists.outputs.version_url }}" "${{ steps.exists.outputs.version_url }}.sha256"
-
-    - name: Rename files (for new builds)
-      if: ${{ steps.rebuild.result != 'skipped' }}
-      run: |
-        mv '${{ steps.vars.outputs.file }}' '${{ steps.vars.outputs.latest }}'
-        mv '${{ steps.vars.outputs.file }}.sha256' '${{ steps.vars.outputs.latest }}.sha256'
-
-    - name: Retrieve current job ID
-      uses: austenstone/job-id@v1
-      id: job-id
-      if: ${{ steps.rebuild.result != 'skipped' || steps.exists.outputs.latest == 'false' }}
 
     - name: Upload artifacts
       if: ${{ steps.job-id.result != 'skipped' }}
       uses: actions/upload-artifact@v4
       with:
-        name: packages-${{ steps.job-id.outputs.job-id }}
+        name: ${{ steps.vars.outputs.artifact }}
         path: |
           ${{ steps.vars.outputs.latest }}
           ${{ steps.vars.outputs.latest }}.sha256
 
 
-  upload-release:
+  define-upload-matrix:
     runs-on: ubuntu-latest
     needs: handle-package
+    outputs:
+      versions: ${{ steps.extract.outputs.versions }}
     steps:
-      - name: Download reports' artifacts
-        uses: actions/download-artifact@v3
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Check if any packages uploaded
-        id: exists
-        uses: andstor/file-existence-action@v3
-        with:
-          files: "artifacts/*/*_latest_*.deb*"
+      - name: List .deb files and extract versions
+        id: extract
+        run: |
+          echo "::group::Extract version numbers"
+          versions=()
+          mkdir -p release
+          latdir="release/${{ env.PERMANENT_RELEASE }}"
+          for file in $(find artifacts -name "*.deb"); do
+            # Extract the version using basename and cut
+            filename=$(basename "$file")
+            version="$(echo "$filename" | rev | cut -d'_' -f2 | rev)"
+            latest="$latdir/${filename/_${version}_/_latest_}"
 
-      - name: Release with latest
-        if: ${{ steps.exists.outputs.files_exists == 'true' }}
+            # @TODO: compare versions
+            if [ -f "$latest" ]; then
+              echo "WARNING: Conflicting files on latest/$filename"
+            else
+              mkdir -p "$latdir"
+              echo "Copying $file to ${{ env.PERMANENT_RELEASE }}"
+              cp "$file" "$latest"
+              (cd $latdir && sha256sum "$latest" > $latest.sha256)
+            fi
+
+            mkdir -p "release/$version"
+            echo "Copying $file to $version"
+            cp "$file" "release/$version/$filename"
+          done
+          echo "::endgroup::"
+
+          echo "versions=$(ls | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+
+    - name: Upload artifacts
+      if: ${{ steps.extract.outputs.versions != '[]' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: release
+        path: release
+  
+
+  upload-release:
+    runs-on: ubuntu-latest
+    needs: define-upload-matrix
+    name: Release ${{ matrix.version }} packages
+    strategy:
+      matrix:
+        version: ${{ fromJSON(needs.define-upload-matrix.outputs.versions) }}
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+
+      - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ env.PERMANENT_RELEASE }}"
-          files: "artifacts/*/*_latest_*.deb*"
-          overwrite: true
-          make_latest: true
-          prerelease: false
+          tag_name: "${{ matrix.version }}"
+          files: "release/${{ matrix.version }}/*"
+          make_latest: ${{ matrix.version == env.PERMANENT_RELEASE }}
+          prerelease: true
