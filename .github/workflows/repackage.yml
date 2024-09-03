@@ -122,7 +122,7 @@ jobs:
     - name: Rename to latest
       if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
       run: |
-        mv "${{ steps.vars.output.file }}" "${{ steps.vars.output.latest }}"
+        mv "${{ steps.vars.outputs.file }}" "${{ steps.vars.outputs.latest }}"
 
     - name: Release with repository
       if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' || steps.check.output_exists == 'part' }}
