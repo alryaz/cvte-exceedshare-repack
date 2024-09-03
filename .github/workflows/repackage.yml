@@ -57,10 +57,10 @@ jobs:
         file="$(basename "${{ matrix.link }}")"
         version="$(echo "${file}" | cut -d'_' -f2)"
         (
-          echo "file=${file}"
-          echo "version=${version}"
-          echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
-          echi "latest="${file/_${version}_/_latest_}"
+          echo "file='${file}'"
+          echo "version='${version}'"
+          echo "tag='${{ env.PACKAGE_NAME }}-v${version}'"
+          echo "latest='${file/_${version}_/_latest_}'"
         ) >> $GITHUB_OUTPUT
 
     - name: Check if release upload already exists
