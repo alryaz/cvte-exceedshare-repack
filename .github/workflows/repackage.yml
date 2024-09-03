@@ -180,7 +180,7 @@ jobs:
       if: ${{ steps.job-id.result != 'skipped' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.job-id.outputs.job-id }}_artifacts
+        name: packages-${{ steps.job-id.outputs.job-id }}
         path: |
           ${{ steps.vars.outputs.latest }}
           ${{ steps.vars.outputs.latest }}.sha256
