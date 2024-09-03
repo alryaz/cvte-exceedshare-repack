@@ -189,12 +189,12 @@ jobs:
 
           echo "versions=$(ls | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
 
-    - name: Upload artifacts
-      if: ${{ steps.extract.outputs.versions != '[]' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: release
-        path: release
+      - name: Upload artifacts
+        if: ${{ steps.extract.outputs.versions != '[]' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release
   
 
   upload-release:
