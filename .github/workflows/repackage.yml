@@ -78,7 +78,7 @@ jobs:
           url="${{ github.server_url }}/${{ github.repository }}/releases/download/$1"
           echo "$2_url=${url}" >> $GITHUB_OUTPUT
           (curl -sIL --fail-with-body "${url}" && curl -sIL --fail-with-body "${url}.sha256") &&
-          (echo $1=true >> $GITHUB_OUTPUT) || (echo $1=false >> $GITHUB_OUTPUT)
+          (echo $2=true >> $GITHUB_OUTPUT) || (echo $2=false >> $GITHUB_OUTPUT)
           echo "::endgroup::"
         }
 
