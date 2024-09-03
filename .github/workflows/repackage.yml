@@ -3,11 +3,16 @@ name: Repackage UOS/Deepin packages
 on:
   workflow_dispatch:
     inputs:
-      rebuild:
-        description: 'Force package rebuild'
+      ignore_existing:
+        description: 'Ignore existing releases'
         required: false
         type: 'boolean'
         default: 'true'
+      download_existing:
+        description: 'Download instead of building'
+        required: false
+        type: 'boolean'
+        default: 'false'
   schedule:
     - cron: "0 0 * * *"
 
@@ -90,8 +95,13 @@ jobs:
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: Download instead of building
+      if: ${{ github.event_name == 'workflow_dispatch' && !github.event.inputs.ignore_existing && github.event.inputs.download_existing && steps.check.outputs.exists == 'true' }}
+      id: simulate
+      run: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
+
     - name: Download package from repository
-      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.rebuild) || steps.check.outputs.exists == 'false' }}
+      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing) || steps.check.outputs.exists == 'false' }}
       id: download
       uses: nick-fields/retry@v3
       with:
