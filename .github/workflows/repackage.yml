@@ -70,8 +70,8 @@ jobs:
         check_exists() {
           url="${{ github.server_url }}/${{ github.repository }}/releases/download/$1"
           echo "$2_url=${url}" >> $GITHUB_OUTPUT
-          echo $1=((curl -sIL --fail-with-body "${url}" && curl -sIL --fail-with-body "${url}.sha256") &&
-          ( echo true ) || ( echo false )) >> $GITHUB_OUTPUT
+          (curl -sIL --fail-with-body "${url}" && curl -sIL --fail-with-body "${url}.sha256") &&
+          (echo $1=true >> $GITHUB_OUTPUT) || (echo $1=false >> $GITHUB_OUTPUT)
         }
 
         check_exists "${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" "version"
