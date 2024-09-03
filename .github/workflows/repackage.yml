@@ -14,7 +14,7 @@ jobs:
     - name: Download Release file
       run: |
         # Download the Release file
-        curl -vsL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
+        curl -fsL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
         
     - name: Parse package sources
       run: |
@@ -24,14 +24,14 @@ jobs:
       run: |
         while read source; do
           echo "Downloading package source: ${source}"
-          curl -vsL -O "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/${source}"
+          curl -sL -O "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/${source}"
         done < package.sources > Packages
     
     - name: Download packages
       run: |
         while read -r package; do
           echo "Downloading package: ${package}"
-          curl -vsL -o $(basename "${package}") "${{ env.REPOSITORY_URL }}/${package}"
+          curl -sL -o $(basename "${package}") "${{ env.REPOSITORY_URL }}/${package}"
         done < <(grep -oE '[^ ]+com\.cvte\.exceedshare[^ ]+\.deb' Packages)
     
     - name: Upload debian packages
