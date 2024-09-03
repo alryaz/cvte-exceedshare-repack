@@ -104,7 +104,8 @@ jobs:
       with:
         timeout_minutes: 3
         max_attempts: 5
-        command: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
+        command: |
+          curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}" && touch "${{ matrix.item.file }}.downloaded"
 
     - name: Download package from repository
       if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing != 'false') || steps.check.outputs.exists == 'false' }}
@@ -158,7 +159,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.vars.outputs.artifact }}
-        path: ${{ matrix.item.file }}
+        path: "${{ matrix.item.file }}*"
 
 
   define-upload-matrix:
@@ -188,7 +189,13 @@ jobs:
             # Extract the version using basename and cut
             filename=$(basename "$file")
             version="$(echo "$filename" | rev | cut -d'_' -f2 | rev)"
-            release "$file" "$version" "$filename"
+
+            # Release version only if not downloaded already
+            if [ ! -e "${file}.downloaded" ]; then
+              release "$file" "$version" "$filename"
+            fi
+
+            # Release latest regardless
             release "$file" "${{ env.PERMANENT_RELEASE }}" "${filename/_${version}_/_latest_}"
           done
           echo "versions=$(ls release | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
