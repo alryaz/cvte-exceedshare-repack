@@ -224,7 +224,7 @@ jobs:
       - name: Download latest versions
         uses: Itsblue/download-release-assets-action@v4
         with:
-          files: "*.deb"
+          file: "*.deb"
           version: "tags/${{ env.PERMANENT_RELEASE }}"
           path: release
 
