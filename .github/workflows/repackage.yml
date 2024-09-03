@@ -18,21 +18,23 @@ jobs:
         
     - name: Parse package sources
       run: |
-        grep -Eo '[^ ]+/Packages' Release | sort | uniq > package.sources
+        grep -Eo '[^ ]+/Packages' Release | sort | uniq > Sources
+        [ -s "Sources"] && ( echo "Sources not found" >&2; exit 1 )
+        echo "Found sources:"
+        cat Sources
         
     - name: Download package sources
       run: |
         while read source; do
-          echo "Downloading package source: ${source}"
           curl -sL -O "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/${source}"
-        done < package.sources > Packages
+        done < Sources > Packages
     
     - name: Download packages
       run: |
         while read -r package; do
           echo "Downloading package: ${package}"
           curl -sL -o $(basename "${package}") "${{ env.REPOSITORY_URL }}/${package}"
-        done < <(grep -oE '[^ ]+com\.cvte\.exceedshare[^ ]+\.deb' Packages)
+        done < <(grep -oE '[^ ]+com\.cvte\.exceedshare[^ ]+\.deb' Packages.*)
     
     - name: Upload debian packages
       uses: actions/upload-artifact@v4
