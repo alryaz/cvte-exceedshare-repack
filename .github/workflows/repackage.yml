@@ -22,7 +22,7 @@ jobs:
     name: Find latest packages
     runs-on: ubuntu-latest
     outputs:
-      links: ${{ steps.links.outputs.links }}
+      items: ${{ steps.links.outputs.items }}
     steps:
     - name: Download Release file
       uses: nick-fields/retry@v3
@@ -45,44 +45,42 @@ jobs:
         max_attempts: 5
         command: curl -L --parallel --parallel-immediate $(sed -e 's!^!${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/!g' Sources) > Packages
 
-    - name: Store package laths
-      id: links
+    - name: Store package items
+      id: items
       run: |
         # Capture the output of the grep command
         DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages | sort | uniq)
 
         # Convert the output to a JSON array
-        DEB_LINKS_JSON=$(echo "$DEB_LINKS" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+        DEB_FILES_JSON=$(echo "$DEB_FILES" | jq -R -s -c 'split("\n") | map(select(length > 0) | {path: ., file: (split("/") | last)})')
 
         # Set the output
-        echo "links=$DEB_LINKS_JSON" >> $GITHUB_OUTPUT
+        echo "items=$DEB_LINKS_JSON" >> $GITHUB_OUTPUT
 
 
   handle-package:
-    name: "Rebuild: ${{ matrix.link }}"
+    name: "Rebuild: ${{ matrix.item.file }}"
     runs-on: ubuntu-latest
     needs: download-lists
     strategy:
       matrix:
-        link: ${{ fromJSON(needs.download-lists.outputs.links) }}
+        item: ${{ fromJSON(needs.download-lists.outputs.items) }}
       fail-fast: false
     steps:
     - name: Store outputs
       id: vars
       run: |
-        file="$(basename "${{ matrix.link }}")"
-        version="$(echo "${file}" | rev | cut -d'_' -f2 | rev)"
+        version="$(echo "${{ matrix.item.file }}" | rev | cut -d'_' -f2 | rev)"
         (
-          echo "file=${file}"
           echo "version=${version}"
           echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
-          echo "artifact=file-$(echo "${file}" | sha256sum | cut -d' ' -f1)"
+          echo "artifact=file-$(echo "${{ matrix.item.file }}" | sha256sum | cut -d' ' -f1)"
         ) >> $GITHUB_OUTPUT
 
     - name: Check if release upload already exists
       id: check
       run: |
-        url="${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
+        url="${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ matrix.item.file }}"
         echo "url=${url}" >> $GITHUB_OUTPUT
 
         if curl -fLIZ "${url}" "${url}.sha256"; then
@@ -98,7 +96,7 @@ jobs:
       with:
         timeout_minutes: 3
         max_attempts: 5
-        command: curl -L -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
+        command: curl -L -o "${{ matrix.item.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.item.path }}"
 
     - name: Rebuild package
       id: rebuild
@@ -106,8 +104,8 @@ jobs:
       run: |
         echo "::group::Extract package contents to a temporary directory"
         mkdir -p unpacked
-        dpkg-deb -x "${{ steps.vars.outputs.file }}" unpacked
-        dpkg-deb --control "${{ steps.vars.outputs.file }}" "unpacked/DEBIAN"
+        dpkg-deb -x "${{ matrix.item.file }}" unpacked
+        dpkg-deb --control "${{ matrix.item.file }}" "unpacked/DEBIAN"
         echo "::endgroup::"
         
         echo "::group::Modify package contents"
@@ -135,7 +133,7 @@ jobs:
         echo "::endgroup::"
         
         echo "::group::Prepare output files"
-        dpkg -b unpacked "${{ steps.vars.outputs.file }}"
+        dpkg -b unpacked "${{ matrix.item.file }}"
         echo "::endgroup::"
 
     - name: Upload artifacts
@@ -143,7 +141,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.vars.outputs.artifact }}
-        path: ${{ steps.vars.outputs.file }}
+        path: ${{ matrix.item.file }}
 
 
   define-upload-matrix:
