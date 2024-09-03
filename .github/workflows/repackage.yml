@@ -251,7 +251,7 @@ jobs:
               echo "$file" | rev | cut -d'_' -f1 | rev
           done | sort | uniq >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo public<<EOF" >> $GITHUB_OUTPUT
+          echo "public<<EOF" >> $GITHUB_OUTPUT
           cat release/signing-key.pub >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
