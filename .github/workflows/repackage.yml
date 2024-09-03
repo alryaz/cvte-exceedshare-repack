@@ -2,6 +2,8 @@ name: Repackage UOS/Deepin packages
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
 
 env:
   REPOSITORY_URL: "https://home-store-packages.uniontech.com/appstore"
@@ -61,6 +63,7 @@ jobs:
         ) >> $GITHUB_OUTPUT
 
     - name: Check if release upload already exists
+      if: ${{ github.event_name != 'workflow_dispatch' }}
       id: check
       run: |
         curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" && (
@@ -70,12 +73,12 @@ jobs:
         )
 
     - name: Download packages
-      if: ${{ steps.check.output.exists == 'false' }}
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
       run: |
         curl -sL -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
 
     - name: Rebuild packages
-      if: ${{ steps.check.output.exists == 'false' }}
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
       run: |
         # Extract package contents to temporary directory
         mkdir -p unpacked
@@ -103,7 +106,7 @@ jobs:
         dpkg -b unpacked "${{ steps.vars.outputs.file }}"
 
     - name: Release
-      if: ${{ steps.check.output.exists == 'false' }}
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "${{ steps.vars.outputs.tag }}"
