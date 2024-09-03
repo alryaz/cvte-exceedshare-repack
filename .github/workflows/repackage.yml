@@ -258,8 +258,8 @@ jobs:
       - uses: smeinecke/apt-repo-action@v2.1.4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          arch: ${{ steps.data.outputs.architectures }}
-          version: debian
+          repo_supported_arch: ${{ steps.data.outputs.architectures }}
+          repo_supported_version: debian
           file: "release/*.deb"
           file_target_version: debian
           public_key: ${{ steps.data.outputs.public }}
