@@ -6,6 +6,7 @@ on:
     - cron: "0 0 * * *"
 
 env:
+  PERMANENT_RELEASE: repository
   REPOSITORY_URL: "https://home-store-packages.uniontech.com/appstore"
   REPOSITORY_DIST: "eagle"
   PACKAGE_NAME: com.cvte.exceedshare
@@ -65,27 +66,25 @@ jobs:
 
     - name: Check if release upload already exists
       if: ${{ github.event_name != 'workflow_dispatch' }}
-      id: check
+      id: exists
       run: |
-        curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" && (
-          curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/repository/${{ steps.vars.outputs.latest }}" && (
-            echo "exists='true'" >> $GITHUB_OUTPUT
-          ) || (
-            curl -sL -o "${{ steps.vars.output.file }}" "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
-            echo "exists='part'" >> $GITHUB_OUTPUT
-          )
-        ) || (
-          echo "exists='false'" >> $GITHUB_OUTPUT
-        )
+        check_exists() {
+          url="${{ github.server_url }}/${{ github.repository }}/releases/download/$1"
+          echo "$2_url='${url}'" >> $GITHUB_OUTPUT
+          echo $1=((curl -sIL --fail-with-body "${url}" && curl -sIL --fail-with-body "${url}.sha256") &&
+          ( echo true ) || ( echo false )) >> $GITHUB_OUTPUT
+        }
 
-    - name: Download packages
-      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
+        check_exists "${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" "version"
+        check_exists "${{ env.PERMANENT_RELEASE }}/${{ steps.vars.outputs.latest }}" "latest"
+
+    - name: Rebuild package
+      id: rebuild
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.exists.outputs.version == 'false' }}
       run: |
+        # Download package
         curl -sL -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
 
-    - name: Rebuild packages
-      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
-      run: |
         # Extract package contents to temporary directory
         mkdir -p unpacked
         dpkg-deb -x "${{ steps.vars.outputs.file }}" unpacked
@@ -111,24 +110,53 @@ jobs:
         # Rebuild package
         dpkg -b unpacked "${{ steps.vars.outputs.file }}"
 
-    - name: Release with version
-      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
-      uses: svenstaro/upload-release-action@v2
+        # Calculate hash
+        sha256sum "${{ steps.vars.outputs.file }}" > "${{ steps.vars.outputs.file }}.sha256"
+
+    - name: Delete version files
+      if: ${{ steps.rebuild.result != 'skipped' && steps.exists.outputs.version == 'true' }}
+      uses: flcdrg/remove-release-asset-action@v1
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag: "${{ steps.vars.outputs.tag }}"
-        file: "${{ steps.vars.outputs.file }}"
-        asset_name: "${{ steps.vars.outputs.file }}"
+          release_id: "${{ steps.vars.outputs.tag }}"
+          asset_name: "${{ steps.vars.outputs.file }}*"
+      
+    - name: Release with version
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.exists.outputs.version == 'false' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "${{ steps.vars.outputs.tag }}"
+        files: "${{ steps.vars.outputs.file }}*"
         make_latest: false
-        overwrite: true
         prerelease: true
 
-    - name: Release with repository
-      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' || steps.check.output_exists == 'part' }}
-      uses: svenstaro/upload-release-action@v2
+    - name: Download release files
+      if: ${{ steps.rebuild.result == 'skipped' }}
+      run: |
+        url="${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
+        curl -fLZ -o '${{ steps.vars.outputs.file }}' '${{ steps.vars.outputs.file }}.sha256' "${url}" "${url}.sha256"
+
+    - name: Delete latest files
+      if: ${{ steps.rebuild.result != 'skipped' && steps.exists.outputs.latest == 'true' }}
+      uses: flcdrg/remove-release-asset-action@v1
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag: "repository"
-        file: "${{ steps.vars.outputs.file }}"
-        asset_name: "${{ steps.vars.outputs.latest }}"
+          release_id: "${{ steps.vars.outputs.tag }}"
+          asset_name: "${{ steps.vars.outputs.file }}*"
+
+    - name: Rename files
+      if: ${{ steps.rebuild.result != 'skipped' }}
+      run: |
+        mv '${{ steps.vars.outputs.file }}' '${{ steps.vars.outputs.latest }}'
+        mv '${{ steps.vars.outputs.file }}.sha256' '${{ steps.vars.outputs.file }}.sha256'
+
+    - name: Release with latest
+      if: ${{ steps.rebuild.result != 'skipped' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        tag: "${{ env.PERMANENT_RELEASE }}"
+        files: "${{ steps.vars.outputs.latest }}*"
         make_latest: true
-        overwrite: true
         prerelease: false
