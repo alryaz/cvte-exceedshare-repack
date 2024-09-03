@@ -18,9 +18,11 @@ jobs:
       links: ${{ steps.links.outputs.links }}
     steps:
     - name: Download Release file
-      run: |
-        # Download the Release file
-        curl -fsL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
+      uses: nick-fields/retry@v3
+      with:
+        timeout_minutes: 3
+        max_attempts: 3
+        command: curl -fsL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
         
     - name: Parse package sources
       run: |
@@ -30,8 +32,11 @@ jobs:
         cat Sources
         
     - name: Download package sources
-      run: |
-        curl -sL --parallel --parallel-immediate $(sed -e 's!^!${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/!g' Sources) > Packages
+      uses: nick-fields/retry@v3
+      with:
+        timeout_minutes: 3
+        max_attempts: 3
+        command: curl -sL --parallel --parallel-immediate $(sed -e 's!^!${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/!g' Sources) > Packages
 
     - name: Store package laths
       id: links
@@ -77,14 +82,18 @@ jobs:
         check_exists "${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" "version"
         check_exists "${{ env.PERMANENT_RELEASE }}/${{ steps.vars.outputs.latest }}" "latest"
 
+    - name: Download package from repository
+      if: ${{ github.event_name == 'workflow_dispatch' || steps.exists.outputs.version == 'false' }}
+      uses: nick-fields/retry@v3
+      with:
+        timeout_minutes: 3
+        max_attempts: 3
+        command: curl -L -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
+
     - name: Rebuild package
       id: rebuild
       if: ${{ github.event_name == 'workflow_dispatch' || steps.exists.outputs.version == 'false' }}
       run: |
-        echo "::group::Downloading package"
-        curl -L -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
-        echo "::endgroup::"
-
         echo "::group::Extract package contents to a temporary directory"
         mkdir -p unpacked
         dpkg-deb -x "${{ steps.vars.outputs.file }}" unpacked
