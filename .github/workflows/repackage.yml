@@ -236,7 +236,7 @@ jobs:
       - name: Download latest versions
         uses: robinraju/release-downloader@main
         with:
-          tag: ${{ env.PERMANENT_RELEASE }}
+          tag: ${{ env.PACKAGE_NAME }}-${{ env.PERMANENT_RELEASE }}
           fileName: '*.deb'
           tarBall: false
           zipBall: false
