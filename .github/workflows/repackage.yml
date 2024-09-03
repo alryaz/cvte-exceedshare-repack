@@ -63,7 +63,7 @@ jobs:
     - name: Store package version
       id: version
       run: |
-        echo "version=$(dpkg-deb -f "${{ steps.filename.outputs.filename }}")" >> $GITHUB_OUTPUT
+        echo "version=$(dpkg-deb -f "${{ steps.filename.outputs.filename }}" Version)" >> $GITHUB_OUTPUT
 
     - name: Rebuild packages
       run: |
