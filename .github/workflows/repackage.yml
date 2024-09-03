@@ -98,12 +98,12 @@ jobs:
         fi
 
     - name: Download instead of building
-      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing == 'false' && github.event.inputs.download_existing && steps.check.outputs.exists == 'true' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing == 'false' && github.event.inputs.download_existing != 'false' && steps.check.outputs.exists == 'true' }}
       id: simulate
       run: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
 
     - name: Download package from repository
-      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing) || steps.check.outputs.exists == 'false' }}
+      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing != 'false') || steps.check.outputs.exists == 'false' }}
       id: download
       uses: nick-fields/retry@v3
       with:
