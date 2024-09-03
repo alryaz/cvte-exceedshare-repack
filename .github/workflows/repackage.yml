@@ -241,7 +241,7 @@ jobs:
         with:
           ref: gh-pages
           path: release
-          sparse-checkout: 'signing-key.pub'
+          sparse-checkout: 'public.key'
           sparse-checkout-cone-mode: false
         
       - name: Download latest versions
