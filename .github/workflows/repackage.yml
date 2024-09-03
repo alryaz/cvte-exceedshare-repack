@@ -58,19 +58,18 @@ jobs:
         file="$(basename "${{ matrix.link }}")"
         version="$(echo "${file}" | cut -d'_' -f2)"
         (
-          echo "file='${file}'"
-          echo "version='${version}'"
-          echo "tag='${{ env.PACKAGE_NAME }}-v${version}'"
-          echo "latest='${file/_${version}_/_latest_}'"
+          echo "file=${file}"
+          echo "version=${version}"
+          echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
+          echo "latest=${file/_${version}_/_latest_}"
         ) >> $GITHUB_OUTPUT
 
     - name: Check if release upload already exists
-      if: ${{ github.event_name != 'workflow_dispatch' }}
       id: exists
       run: |
         check_exists() {
           url="${{ github.server_url }}/${{ github.repository }}/releases/download/$1"
-          echo "$2_url='${url}'" >> $GITHUB_OUTPUT
+          echo "$2_url=${url}" >> $GITHUB_OUTPUT
           echo $1=((curl -sIL --fail-with-body "${url}" && curl -sIL --fail-with-body "${url}.sha256") &&
           ( echo true ) || ( echo false )) >> $GITHUB_OUTPUT
         }
@@ -82,14 +81,17 @@ jobs:
       id: rebuild
       if: ${{ github.event_name == 'workflow_dispatch' || steps.exists.outputs.version == 'false' }}
       run: |
-        # Download package
-        curl -sL -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
+        echo "::group::Downloading package"
+        curl -L -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
+        echo "::endgroup::"
 
-        # Extract package contents to temporary directory
+        echo "::group::Extract package contents to a temporary directory"
         mkdir -p unpacked
         dpkg-deb -x "${{ steps.vars.outputs.file }}" unpacked
         dpkg-deb --control "${{ steps.vars.outputs.file }}" "unpacked/DEBIAN"
+        echo "::endgroup::"
         
+        echo "::group::Modify package contents"
         # Remove obscure dependency
         sed -i '/deepin-elf-verify/d' "unpacked/DEBIAN/control"
         
@@ -106,12 +108,12 @@ jobs:
         if ! grep -q 'update-desktop-database' "unpacked/DEBIAN/postinst"; then
             echo 'dpkg-trigger update-desktop-database' >> "unpacked/DEBIAN/postinst"
         fi
+        echo "::endgroup::"
         
-        # Rebuild package
+        echo "::group::Prepare output files"
         dpkg -b unpacked "${{ steps.vars.outputs.file }}"
-
-        # Calculate hash
         sha256sum "${{ steps.vars.outputs.file }}" > "${{ steps.vars.outputs.file }}.sha256"
+        echo "::endgroup::"
 
     - name: Delete version files
       if: ${{ steps.rebuild.result != 'skipped' && steps.exists.outputs.version == 'true' }}
@@ -134,8 +136,8 @@ jobs:
     - name: Download release files
       if: ${{ steps.rebuild.result == 'skipped' }}
       run: |
-        url="${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
-        curl -fLZ -o '${{ steps.vars.outputs.file }}' '${{ steps.vars.outputs.file }}.sha256' "${url}" "${url}.sha256"
+        curl -fLZ -o '${{ steps.vars.outputs.file }}' '${{ steps.vars.outputs.file }}.sha256' \
+          "${{ steps.exists.outputs.version_url }}" "${{ steps.exists.outputs.version_url }}.sha256"
 
     - name: Delete latest files
       if: ${{ steps.rebuild.result != 'skipped' && steps.exists.outputs.latest == 'true' }}
