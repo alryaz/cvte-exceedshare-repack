@@ -90,8 +90,10 @@ jobs:
         echo "url=${url}" >> $GITHUB_OUTPUT
 
         if curl -fLIZ "${url}" "${url}.sha256"; then
+          echo "Release already exists and is uploaded"
           echo "exists=true" >> $GITHUB_OUTPUT
         else
+          echo "Release does not exist or is incomplete"
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
 
