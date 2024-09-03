@@ -56,6 +56,7 @@ jobs:
     strategy:
       matrix:
         link: ${{ fromJSON(needs.download-lists.outputs.links) }}
+      fail-fast: false
     steps:
     - name: Store outputs
       id: vars
