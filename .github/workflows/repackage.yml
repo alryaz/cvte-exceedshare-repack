@@ -26,7 +26,7 @@ jobs:
     - name: Download package sources
       run: |
         while read source; do
-          curl -sL -O "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/${source}"
+          curl -sL "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/${source}"
         done < Sources > Packages
     
     - name: Download packages
@@ -35,7 +35,11 @@ jobs:
           echo "Downloading package: ${package}"
           curl -sL -o $(basename "${package}") "${{ env.REPOSITORY_URL }}/${package}"
         done < <(grep -oE '[^ ]+com\.cvte\.exceedshare[^ ]+\.deb' Packages)
-    
+
+    - name: Check if files are present
+      run: |
+        ls *.deb >/dev/null || ( echo "No packages downloaded, check output" >&2; exit 1 )
+ 
     - name: Upload debian packages
       uses: actions/upload-artifact@v4
       with:
