@@ -102,7 +102,10 @@ jobs:
       id: latest
       uses: nick-fields/retry@v3
       with:
-        command: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
+        timeout_minutes: 3
+        max_attempts: 5
+        command: |
+          curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}" && touch "${{ matrix.item.file }}.downloaded"
 
     - name: Download package from repository
       if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing != 'false') || steps.check.outputs.exists == 'false' }}
@@ -115,7 +118,7 @@ jobs:
 
     - name: Rebuild package
       id: rebuild
-      if: ${{ steps.download.result == 'success' }}
+      if: ${{ steps.download.outcome == 'success' }}
       run: |
         echo "::group::Extract package contents to a temporary directory"
         mkdir -p unpacked
@@ -152,11 +155,11 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload artifacts
-      if: ${{ steps.download.result == 'success' || steps.latest.result == 'success' }}
+      if: ${{ steps.download.outcome == 'success' || steps.latest.outcome == 'success' }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.vars.outputs.artifact }}
-        path: ${{ matrix.item.file }}
+        path: "${{ matrix.item.file }}*"
 
 
   define-upload-matrix:
@@ -186,7 +189,13 @@ jobs:
             # Extract the version using basename and cut
             filename=$(basename "$file")
             version="$(echo "$filename" | rev | cut -d'_' -f2 | rev)"
-            release "$file" "$version" "$filename"
+
+            # Release version only if not downloaded already
+            if [ ! -e "${file}.downloaded" ]; then
+              release "$file" "$version" "$filename"
+            fi
+
+            # Release latest regardless
             release "$file" "${{ env.PERMANENT_RELEASE }}" "${filename/_${version}_/_latest_}"
           done
           echo "versions=$(ls release | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
@@ -232,7 +241,7 @@ jobs:
         with:
           ref: gh-pages
           path: release
-          sparse-checkout: 'signing-key.pub'
+          sparse-checkout: 'public.key'
           sparse-checkout-cone-mode: false
         
       - name: Download latest versions
@@ -250,11 +259,11 @@ jobs:
         run: |
           echo "architectures<<EOF" >> $GITHUB_OUTPUT
           for file in release/*.deb; do
-              echo "$file" | rev | cut -d'_' -f1 | rev
+              echo "${file//.deb}" | rev | cut -d'_' -f1 | rev
           done | sort | uniq >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "public<<EOF" >> $GITHUB_OUTPUT
-          cat release/signing-key.pub >> $GITHUB_OUTPUT
+          cat release/public.key >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
       - uses: smeinecke/apt-repo-action@v2.1.4
