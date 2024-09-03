@@ -73,10 +73,12 @@ jobs:
       id: exists
       run: |
         check_exists() {
+          echo "::group::Checking if $1 release item exists"
           url="${{ github.server_url }}/${{ github.repository }}/releases/download/$1"
           echo "$2_url=${url}" >> $GITHUB_OUTPUT
           (curl -sIL --fail-with-body "${url}" && curl -sIL --fail-with-body "${url}.sha256") &&
           (echo $1=true >> $GITHUB_OUTPUT) || (echo $1=false >> $GITHUB_OUTPUT)
+          echo "::endgroup::"
         }
 
         check_exists "${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" "version"
@@ -113,7 +115,7 @@ jobs:
             find applications icons \
                 -type f \
                 -exec sh -c 'mkdir -p "unpacked/usr/share/$(dirname "{}")"' \; \
-                -exec echo 'Symlinking /opt/apps/${{ env.PACKAGE_NAME }}/{} to /usr/share/{}' \; \
+                -exec echo 'Symlinking /usr/share/{} to /opt/apps/${{ env.PACKAGE_NAME }}/{}' \; \
                 -exec ln -s "/opt/apps/${{ env.PACKAGE_NAME }}/entries/{}" "unpacked/usr/share/{}" \;
         )
         
@@ -146,6 +148,7 @@ jobs:
         files: "${{ steps.vars.outputs.file }}*"
         make_latest: false
         prerelease: true
+        fail_on_unmatched_files: true
 
     - name: Download release files
       if: ${{ steps.rebuild.result == 'skipped' }}
@@ -172,7 +175,8 @@ jobs:
       if: ${{ steps.rebuild.result != 'skipped' }}
       uses: softprops/action-gh-release@v2
       with:
-        tag: "${{ env.PERMANENT_RELEASE }}"
+        tag_name: "${{ env.PERMANENT_RELEASE }}"
         files: "${{ steps.vars.outputs.latest }}*"
         make_latest: true
         prerelease: false
+        fail_on_unmatched_files: true
