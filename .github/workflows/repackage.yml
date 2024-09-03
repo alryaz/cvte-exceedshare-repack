@@ -63,13 +63,12 @@ jobs:
     - name: Check if release upload already exists
       id: check
       run: |
-        curl -sIL --fail-body "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
-        if $?; then
-          echo "exists=true"
-        else
-          echo "exists=false"
-        fi
-        
+        curl -sIL --fail-with-body "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}" && (
+          echo "exists='true'" >> $GITHUB_OUTPUT
+        ) || (
+          echo "exists='false'" >> $GITHUB_OUTPUT
+        )
+
     - name: Download packages
       if: ${{ steps.check.output.exists == 'false' }}
       run: |
