@@ -102,7 +102,10 @@ jobs:
         
         echo "::group::Modify package contents"
         # Remove obscure dependency
-        sed -i '/deepin-elf-verify/d' "unpacked/DEBIAN/control"
+        if grep -q 'deepin-elf-verify' unpacked/DEBIAN/control; then
+          echo "Removing deepin-elf-verify dependency"
+          sed -i '/deepin-elf-verify/d' unpacked/DEBIAN/control
+        fi
         
         # Make desktop shortcut and icons
         (
@@ -116,6 +119,7 @@ jobs:
         
         # Check if update-desktop-database trigger is present
         if ! grep -q 'update-desktop-database' "unpacked/DEBIAN/postinst"; then
+            echo "Adding trigger to update desktop links database"
             echo 'dpkg-trigger update-desktop-database' >> "unpacked/DEBIAN/postinst"
         fi
         echo "::endgroup::"
