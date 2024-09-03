@@ -49,26 +49,39 @@ jobs:
       matrix:
         link: ${{ fromJSON(needs.download-lists.outputs.links) }}
     steps:
-    - name: Store filename
-      id: filename
+    - name: Store outputs
+      id: vars
       run: |
-        echo "filename=$(basename "${{ matrix.link }}")" >> $GITHUB_OUTPUT
+        file="$(basename "${{ matrix.link }}")"
+        version="$(echo "${file}" | cut -d'_' -f2)"
+        (
+          echo "file=${file}"
+          echo "version=${version}"
+          echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
+        ) >> $GITHUB_OUTPUT
+
+    - name: Check if release upload already exists
+      id: check
+      run: |
+        curl -sIL --fail-body "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ steps.vars.outputs.file }}"
+        if $?; then
+          echo "exists=true"
+        else
+          echo "exists=false"
+        fi
         
     - name: Download packages
+      if: ${{ steps.check.output.exists == 'false' }}
       run: |
-        curl -sL -o "${{ steps.filename.outputs.filename }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
-
-    - name: Store package version
-      id: version
-      run: |
-        echo "version=$(dpkg-deb -f "${{ steps.filename.outputs.filename }}" Version)" >> $GITHUB_OUTPUT
+        curl -sL -o "${{ steps.vars.outputs.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.link }}"
 
     - name: Rebuild packages
+      if: ${{ steps.check.output.exists == 'false' }}
       run: |
         # Extract package contents to temporary directory
         mkdir -p unpacked
-        dpkg-deb -x "${{ steps.filename.outputs.filename }}" unpacked
-        dpkg-deb --control "${{ steps.filename.outputs.filename }}" "unpacked/DEBIAN"
+        dpkg-deb -x "${{ steps.vars.outputs.file }}" unpacked
+        dpkg-deb --control "${{ steps.vars.outputs.file }}" "unpacked/DEBIAN"
         
         # Remove obscure dependency
         sed -i '/deepin-elf-verify/d' "unpacked/DEBIAN/control"
@@ -78,7 +91,7 @@ jobs:
             cd "unpacked/opt/apps/${{ env.PACKAGE_NAME }}/entries"
             find applications icons \
                 -type f \
-                -exec sh -c 'mkdir -p unpacked/usr/share/$(dirname "{}")"' \; \
+                -exec sh -c 'mkdir -p "unpacked/usr/share/$(dirname "{}")"' \; \
                 -exec ln -s "/opt/apps/${{ env.PACKAGE_NAME }}/entries/{}" "unpacked/usr/share/{}" \;
         )
         
@@ -88,10 +101,11 @@ jobs:
         fi
         
         # Rebuild package
-        dpkg -b unpacked "${{ steps.filename.outputs.filename }}"
+        dpkg -b unpacked "${{ steps.vars.outputs.file }}"
 
     - name: Release
+      if: ${{ steps.check.output.exists == 'false' }}
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "${{ env.PACKAGE_NAME }}-v${{ steps.version.outputs.version }}"
-        files: "${{ steps.filename.outputs.filename }}"
+        tag_name: "${{ steps.vars.outputs.tag }}"
+        files: "${{ steps.vars.outputs.file }}"
