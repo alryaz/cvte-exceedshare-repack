@@ -227,6 +227,7 @@ jobs:
           file: "*.deb"
           version: "tags/${{ env.PERMANENT_RELEASE }}"
           path: release
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare data
         id: data
