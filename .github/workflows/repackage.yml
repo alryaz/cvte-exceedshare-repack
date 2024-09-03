@@ -28,9 +28,7 @@ jobs:
         
     - name: Download package sources
       run: |
-        while read source; do
-          curl -sL "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/${source}"
-        done < Sources > Packages
+        curl -sL -o Packages --parallel --parallel-immediate $(sed -e 's!^!${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/!g Sources)'
 
     - name: Store package laths
       id: links
