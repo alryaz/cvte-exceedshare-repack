@@ -263,7 +263,7 @@ jobs:
           done | sort | uniq >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "public<<EOF" >> $GITHUB_OUTPUT
-          cat release/signing-key.pub >> $GITHUB_OUTPUT
+          cat release/public.key >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
       - uses: smeinecke/apt-repo-action@v2.1.4
