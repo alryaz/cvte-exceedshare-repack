@@ -164,7 +164,7 @@ jobs:
             echo "::group::Copy $1 to release/$2/$3"
             mkdir -p "release/$2"
             cp "$1" "release/$2/$3"
-            (cd "$1" && sha256sum "$3" > "$3.sha256")
+            (cd "release/$2" && sha256sum "$3" > "$3.sha256")
             echo "::endgroup::"
           }
           for file in $(find artifacts -name "*.deb"); do
