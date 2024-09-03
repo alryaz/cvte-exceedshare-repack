@@ -113,21 +113,20 @@ jobs:
 
     - name: Release with version
       if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
-      uses: softprops/action-gh-release@v2
+      uses: svenstaro/upload-release-action@v2
       with:
-        tag_name: "${{ steps.vars.outputs.tag }}"
+        tag: "${{ steps.vars.outputs.tag }}"
         files: "${{ steps.vars.outputs.file }}"
+        asset_name: "${{ steps.vars.outputs.file }}"
         make_latest: false
-
-    - name: Rename to latest
-      if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' }}
-      run: |
-        mv "${{ steps.vars.outputs.file }}" "${{ steps.vars.outputs.latest }}"
+        overwrite: true
 
     - name: Release with repository
       if: ${{ github.event_name == 'workflow_dispatch' || steps.check.output.exists == 'false' || steps.check.output_exists == 'part' }}
-      uses: softprops/action-gh-release@v2
+      uses: svenstaro/upload-release-action@v2
       with:
-        tag_name: "repository"
-        files: "${{ steps.vars.outputs.latest }}"
+        tag: "repository"
+        files: "${{ steps.vars.outputs.file }}"
+        asset_name: "${{ steps.vars.outputs.latest }}"
         make_latest: true
+        overwrite: true
