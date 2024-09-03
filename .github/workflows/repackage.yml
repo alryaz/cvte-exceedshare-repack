@@ -220,13 +220,15 @@ jobs:
           path: release
           sparse-checkout: 'signing-key.pub'
           sparse-checkout-cone-mode: false
-          
+        
       - name: Download latest versions
-        uses: Itsblue/download-release-assets-action@v4
+        uses: robinraju/release-downloader@main
         with:
-          file: "*.deb"
-          version: "tags/${{ env.PERMANENT_RELEASE }}"
-          path: release
+          tag: ${{ env.PERMANENT_RELEASE }}
+          fileName: '*.deb'
+          tarBall: false
+          zipBall: false
+          out-file-path: release
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare data
