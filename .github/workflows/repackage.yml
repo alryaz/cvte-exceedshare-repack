@@ -3,16 +3,21 @@ name: Repackage UOS/Deepin packages
 on:
   workflow_dispatch:
     inputs:
-      rebuild:
-        description: 'Force package rebuild'
-        required: false
+      ignore_existing:
+        description: 'Ignore existing releases'
+        required: true
         type: 'boolean'
         default: 'true'
+      download_existing:
+        description: 'Download instead of building'
+        required: true
+        type: 'boolean'
+        default: 'false'
   schedule:
     - cron: "0 0 * * *"
 
 env:
-  PERMANENT_RELEASE: repository
+  PERMANENT_RELEASE: latest
   REPOSITORY_URL: "https://home-store-packages.uniontech.com/appstore"
   REPOSITORY_DIST: "eagle"
   PACKAGE_NAME: com.cvte.exceedshare
@@ -52,8 +57,9 @@ jobs:
         DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages | sort | uniq)
 
         # Convert the output to a JSON array
-        DEB_FILES_JSON=$(echo "$DEB_FILES" | jq -R -s -c 'split("\n") | map(select(length > 0) | {path: ., file: (split("/") | last)})')
+        DEB_LINKS_JSON=$(echo "$DEB_LINKS" | jq -R -s -c 'split("\n") | map(select(length > 0) | {path: ., file: (split("/") | last)})')
 
+        echo $DEB_LINKS_JSON
         # Set the output
         echo "items=$DEB_LINKS_JSON" >> $GITHUB_OUTPUT
 
@@ -73,7 +79,7 @@ jobs:
         version="$(echo "${{ matrix.item.file }}" | rev | cut -d'_' -f2 | rev)"
         (
           echo "version=${version}"
-          echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
+          echo "tag=${{ env.PACKAGE_NAME }}-${version}"
           echo "artifact=file-$(echo "${{ matrix.item.file }}" | sha256sum | cut -d' ' -f1)"
         ) >> $GITHUB_OUTPUT
 
@@ -84,23 +90,32 @@ jobs:
         echo "url=${url}" >> $GITHUB_OUTPUT
 
         if curl -fLIZ "${url}" "${url}.sha256"; then
+          echo "Release already exists and is uploaded"
           echo "exists=true" >> $GITHUB_OUTPUT
         else
+          echo "Release does not exist or is incomplete"
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: Download instead of building
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing == 'false' && github.event.inputs.download_existing != 'false' && steps.check.outputs.exists == 'true' }}
+      id: latest
+      uses: nick-fields/retry@v3
+      with:
+        command: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
+
     - name: Download package from repository
-      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.rebuild) || steps.check.outputs.exists == 'false' }}
+      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing != 'false') || steps.check.outputs.exists == 'false' }}
       id: download
       uses: nick-fields/retry@v3
       with:
         timeout_minutes: 3
         max_attempts: 5
-        command: curl -L -o "${{ matrix.item.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.item.path }}"
+        command: curl -fL -o "${{ matrix.item.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.item.path }}"
 
     - name: Rebuild package
       id: rebuild
-      if: ${{ steps.download.result != 'skipped' }}
+      if: ${{ steps.download.result == 'success' }}
       run: |
         echo "::group::Extract package contents to a temporary directory"
         mkdir -p unpacked
@@ -137,7 +152,7 @@ jobs:
         echo "::endgroup::"
 
     - name: Upload artifacts
-      if: ${{ steps.job-id.result != 'skipped' }}
+      if: ${{ steps.download.result == 'success' || steps.latest.result == 'success' }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.vars.outputs.artifact }}
@@ -201,10 +216,10 @@ jobs:
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ matrix.version }}"
+          tag_name: "${{ env.PACKAGE_NAME }}-${{ matrix.version }}"
           files: "release/${{ matrix.version }}/*"
           make_latest: ${{ matrix.version == env.PERMANENT_RELEASE }}
-          prerelease: true
+          prerelease: ${{ matrix.version != env.PERMANENT_RELEASE }}
 
 
   create-repository:
@@ -219,13 +234,16 @@ jobs:
           path: release
           sparse-checkout: 'signing-key.pub'
           sparse-checkout-cone-mode: false
-          
+        
       - name: Download latest versions
-        uses: Itsblue/download-release-assets-action@v4
+        uses: robinraju/release-downloader@main
         with:
-          files: "*.deb"
-          version: "tags/${{ env.PERMANENT_RELEASE }}"
-          path: release
+          tag: ${{ env.PACKAGE_NAME }}-${{ env.PERMANENT_RELEASE }}
+          fileName: '*.deb'
+          tarBall: false
+          zipBall: false
+          out-file-path: release
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare data
         id: data
@@ -235,15 +253,15 @@ jobs:
               echo "$file" | rev | cut -d'_' -f1 | rev
           done | sort | uniq >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo public<<EOF" >> $GITHUB_OUTPUT
+          echo "public<<EOF" >> $GITHUB_OUTPUT
           cat release/signing-key.pub >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
       - uses: smeinecke/apt-repo-action@v2.1.4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          arch: ${{ steps.data.outputs.architectures }}
-          version: debian
+          repo_supported_arch: ${{ steps.data.outputs.architectures }}
+          repo_supported_version: debian
           file: "release/*.deb"
           file_target_version: debian
           public_key: ${{ steps.data.outputs.public }}
