@@ -196,12 +196,12 @@ jobs:
         with:
           files: "artifacts/*/*_latest_*.deb*"
 
-    - name: Release with latest
-      if: ${{ steps.exists.outputs.files_exists == 'true' }}
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: "${{ env.PERMANENT_RELEASE }}"
-        files: "artifacts/*/*_latest_*.deb*"
-        overwrite: true
-        make_latest: true
-        prerelease: false
+      - name: Release with latest
+        if: ${{ steps.exists.outputs.files_exists == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ env.PERMANENT_RELEASE }}"
+          files: "artifacts/*/*_latest_*.deb*"
+          overwrite: true
+          make_latest: true
+          prerelease: false
