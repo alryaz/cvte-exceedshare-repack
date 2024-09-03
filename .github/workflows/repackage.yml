@@ -52,7 +52,7 @@ jobs:
         DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages | sort | uniq)
 
         # Convert the output to a JSON array
-        DEB_FILES_JSON=$(echo "$DEB_FILES" | jq -R -s -c 'split("\n") | map(select(length > 0) | {path: ., file: (split("/") | last)})')
+        DEB_LINKS_JSON=$(echo "$DEB_FILES" | jq -R -s -c 'split("\n") | map(select(length > 0) | {path: ., file: (split("/") | last)})')
 
         # Set the output
         echo "items=$DEB_LINKS_JSON" >> $GITHUB_OUTPUT
