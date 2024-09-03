@@ -17,7 +17,7 @@ on:
     - cron: "0 0 * * *"
 
 env:
-  PERMANENT_RELEASE: repository
+  PERMANENT_RELEASE: latest
   REPOSITORY_URL: "https://home-store-packages.uniontech.com/appstore"
   REPOSITORY_DIST: "eagle"
   PACKAGE_NAME: com.cvte.exceedshare
@@ -79,7 +79,7 @@ jobs:
         version="$(echo "${{ matrix.item.file }}" | rev | cut -d'_' -f2 | rev)"
         (
           echo "version=${version}"
-          echo "tag=${{ env.PACKAGE_NAME }}-v${version}"
+          echo "tag=${{ env.PACKAGE_NAME }}-${version}"
           echo "artifact=file-$(echo "${{ matrix.item.file }}" | sha256sum | cut -d' ' -f1)"
         ) >> $GITHUB_OUTPUT
 
@@ -214,7 +214,7 @@ jobs:
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ env.PACKAGE_NAME }}-v${{ matrix.version }}"
+          tag_name: "${{ env.PACKAGE_NAME }}-${{ matrix.version }}"
           files: "release/${{ matrix.version }}/*"
           make_latest: ${{ matrix.version == env.PERMANENT_RELEASE }}
           prerelease: ${{ matrix.version != env.PERMANENT_RELEASE }}
