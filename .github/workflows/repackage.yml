@@ -22,7 +22,7 @@ jobs:
       with:
         timeout_minutes: 3
         max_attempts: 3
-        command: curl -fsL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
+        command: curl -fL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
         
     - name: Parse package sources
       run: |
@@ -36,7 +36,7 @@ jobs:
       with:
         timeout_minutes: 3
         max_attempts: 3
-        command: curl -sL --parallel --parallel-immediate $(sed -e 's!^!${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/!g' Sources) > Packages
+        command: curl -L --parallel --parallel-immediate $(sed -e 's!^!${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/!g' Sources) > Packages
 
     - name: Store package laths
       id: links
