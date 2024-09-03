@@ -202,10 +202,10 @@ jobs:
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ matrix.version }}"
+          tag_name: "${{ env.PACKAGE_NAME }}-v${{ matrix.version }}"
           files: "release/${{ matrix.version }}/*"
           make_latest: ${{ matrix.version == env.PERMANENT_RELEASE }}
-          prerelease: true
+          prerelease: ${{ matrix.version != env.PERMANENT_RELEASE }}
 
 
   create-repository:
