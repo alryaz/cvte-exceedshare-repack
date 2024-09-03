@@ -42,7 +42,7 @@ jobs:
       id: links
       run: |
         # Capture the output of the grep command
-        DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages)
+        DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages | sort | uniq)
 
         # Convert the output to a JSON array
         DEB_LINKS_JSON=$(echo "$DEB_LINKS" | jq -R -s -c 'split("\n") | map(select(length > 0))')
