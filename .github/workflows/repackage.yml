@@ -102,6 +102,8 @@ jobs:
       id: latest
       uses: nick-fields/retry@v3
       with:
+        timeout_minutes: 3
+        max_attempts: 5
         command: curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}"
 
     - name: Download package from repository
