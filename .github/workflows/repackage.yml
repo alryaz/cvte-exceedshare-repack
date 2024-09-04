@@ -139,7 +139,7 @@ jobs:
             cd "$path/opt/apps/${{ env.PACKAGE_NAME }}/entries"
             find applications icons \
                 -type f \
-                -exec sh -c 'mkdir -p "$path/usr/share/$(dirname "{}")"' \; \
+                -exec sh -c 'mkdir -p "'$path'/usr/share/$(dirname "{}")"' \; \
                 -exec echo 'Symlinking /usr/share/{} to /opt/apps/${{ env.PACKAGE_NAME }}/{}' \; \
                 -exec ln -s "/opt/apps/${{ env.PACKAGE_NAME }}/entries/{}" "$path/usr/share/{}" \;
         )
