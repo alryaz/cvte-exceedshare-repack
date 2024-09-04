@@ -121,37 +121,38 @@ jobs:
       if: ${{ steps.download.outcome == 'success' }}
       run: |
         echo "::group::Extract package contents to a temporary directory"
-        mkdir -p unpacked
-        dpkg-deb -x "${{ matrix.item.file }}" unpacked
-        dpkg-deb --control "${{ matrix.item.file }}" "unpacked/DEBIAN"
+        path=$(readlink -f ${{ github.workspace }}/unpacked)
+        mkdir -p "$path"
+        dpkg-deb -x "${{ matrix.item.file }}" "$path"
+        dpkg-deb --control "${{ matrix.item.file }}" "$path/DEBIAN"
         echo "::endgroup::"
         
         echo "::group::Modify package contents"
         # Remove obscure dependency
-        if grep -q 'deepin-elf-verify' unpacked/DEBIAN/control; then
+        if grep -q 'deepin-elf-verify' "$path/DEBIAN/control"; then
           echo "Removing deepin-elf-verify dependency"
-          sed -i '/deepin-elf-verify/d' unpacked/DEBIAN/control
+          sed -i '/deepin-elf-verify/d' "$path/DEBIAN/control"
         fi
         
         # Make desktop shortcut and icons
         (
-            cd "unpacked/opt/apps/${{ env.PACKAGE_NAME }}/entries"
+            cd "$path/opt/apps/${{ env.PACKAGE_NAME }}/entries"
             find applications icons \
                 -type f \
-                -exec sh -c 'mkdir -p "unpacked/usr/share/$(dirname "{}")"' \; \
+                -exec sh -c 'mkdir -p "$path/usr/share/$(dirname "{}")"' \; \
                 -exec echo 'Symlinking /usr/share/{} to /opt/apps/${{ env.PACKAGE_NAME }}/{}' \; \
-                -exec ln -s "/opt/apps/${{ env.PACKAGE_NAME }}/entries/{}" "unpacked/usr/share/{}" \;
+                -exec ln -s "/opt/apps/${{ env.PACKAGE_NAME }}/entries/{}" "$path/usr/share/{}" \;
         )
         
         # Check if update-desktop-database trigger is present
-        if ! grep -q 'update-desktop-database' "unpacked/DEBIAN/postinst"; then
+        if ! grep -q "update-desktop-database" "$path/DEBIAN/postinst"; then
             echo "Adding trigger to update desktop links database"
-            echo 'dpkg-trigger update-desktop-database' >> "unpacked/DEBIAN/postinst"
+            echo 'dpkg-trigger update-desktop-database' >> "$path/DEBIAN/postinst"
         fi
         echo "::endgroup::"
         
         echo "::group::Prepare output files"
-        dpkg -b unpacked "${{ matrix.item.file }}"
+        dpkg -b "$path" "${{ matrix.item.file }}"
         echo "::endgroup::"
 
     - name: Upload artifacts
