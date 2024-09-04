@@ -1,0 +1,16 @@
+Package: com.cvte.exceedshare
+Maintainer: lixingxin <lixingxin@cvte.com>
+Installed-Size: 132244
+Homepage: https://excshare.com/
+Priority: optional
+Section: video
+Filename: pool/main/c/com.cvte.exceedshare/com.cvte.exceedshare_5.10.46.1_arm64.deb
+Size: 41469848
+SHA256: 5ed440474cd794e339b126ecb4fb7f8ce203ca38ad110cd2ffa41aa17f36a1f7
+SHA1: 9e3da4bfe3e085ff066f78a6ae85327b74819f33
+MD5sum: 32c3dcd69de4ce58016619a09bcb9f63
+Description: ScreenShare
+Architecture: arm64
+Version: 5.10.46.1
+Replaces: com.cvte.maxhub.dongle, com.cvte.maxhub.share
+
