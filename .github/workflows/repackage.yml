@@ -211,6 +211,7 @@ jobs:
   upload-release:
     runs-on: ubuntu-latest
     needs: define-upload-matrix
+    if: ${{ needs.define-upload-matrix.outputs.versions != '[]' }}
     name: Release ${{ matrix.version }} packages
     strategy:
       matrix:
@@ -233,7 +234,8 @@ jobs:
 
   create-repository:
     runs-on: ubuntu-latest
-    needs: upload-release
+    needs: [define-upload-matrix, upload-release]
+    if: ${{ needs.define-upload-matrix.outputs.versions != '[]' }}
     name: Update APT repository
     steps:
       - name: Checkout signing key
