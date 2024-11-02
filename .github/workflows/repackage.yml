@@ -39,7 +39,7 @@ jobs:
     - name: Parse package sources
       run: |
         grep -Eo '[^ ]+/Packages' Release | sort | uniq > Sources
-        [ -s "Sources"] && ( echo "Sources not found" >&2; exit 1 )
+        [ -s "Sources" ] && ( echo "Sources not found" >&2; exit 1 )
         echo "Found sources:"
         cat Sources
         
