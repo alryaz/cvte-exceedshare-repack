@@ -168,6 +168,20 @@ jobs:
         sudo apt-get update && sudo apt-get install -y alien
         echo "::endgroup::"
 
+        package="${{ github.workspace }}/artifacts/${{ matrix.item.file }}"
+
+        echo "::group::Determine package architecture"
+        architecture="$(dpkg --info "$package" | grep Architecture: | cut -d':' -f2 | xargs echo -n)"
+        case "$architecture" in
+          all) architecture=noarch ;;
+          amd64) architecture=x86_64 ;;
+          arm64) architecture=aarch64 ;;
+          hppa) architecture=parisc ;;
+          ppc) architecture=powerpc ;;
+        esac
+        echo "RPM Architecture: $architecture"
+        echo "::endgroup::"
+
         echo "::group::Extract package contents to a temporary directory"
         path=$(readlink -f ${{ github.workspace }}/unpacked)
         mkdir -p "$path"
@@ -179,7 +193,7 @@ jobs:
             --to-rpm \
             --single \
             --scripts \
-            "${{ github.workspace }}/artifacts/${{ matrix.item.file }}"
+            "$package"
         ) || exit 1
         echo "::endgroup::"
 
@@ -189,7 +203,8 @@ jobs:
           rpmbuild \
             --buildroot "$(pwd)" \
             --bb "$(find . -mindepth 1 -maxdepth 1 -type f -name '*.spec' -print -quit)" \
-            --define '__requires_exclude ^libc\\.so\\.6\\(GLIBC_PRIVATE\\)\\(64bit\\)$'
+            --define '__requires_exclude ^libc\\.so\\.6\\(GLIBC_PRIVATE\\)\\(64bit\\)$' \
+            --target "$architecture"
         ) ||
         echo "::endgroup::"
 
