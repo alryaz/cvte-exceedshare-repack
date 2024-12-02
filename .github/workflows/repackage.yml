@@ -94,15 +94,22 @@ jobs:
       run: |
         mkdir -p artifacts
 
-    - name: Check if release exists
+    - name: Check if release upload already exists
       id: check
-      if: ${{ github.event_name != 'workflow_dispatch' || !github.event.inputs.ignore_existing }}
-      uses: insightsengineering/release-existence-action@main
-      with:
-        release-tag: ${{ steps.vars.outputs.tag }}
+      run: |
+        url="${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ matrix.item.file }}"
+        echo "url=${url}" >> $GITHUB_OUTPUT
+
+        if curl -fLIZ "${url}" "${url}.sha256"; then
+          echo "Release already exists and is uploaded"
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Release does not exist or is incomplete"
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: Download package from repository
-      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing) || steps.check.outputs.release-exists == 'false' }}
+      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing) || steps.check.outputs.exists == 'false' }}
       id: download
       uses: nick-fields/retry@v3
       with:
@@ -172,7 +179,7 @@ jobs:
             --to-rpm \
             --single \
             --scripts \
-            "artifacts/${{ matrix.item.file }}"
+            "${{ github.workspace }}/artifacts/${{ matrix.item.file }}"
         ) || exit 1
         echo "::endgroup::"
 
