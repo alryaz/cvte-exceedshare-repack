@@ -3,16 +3,10 @@ name: Repackage UOS/Deepin packages
 on:
   workflow_dispatch:
     inputs:
-      ignore_existing:
-        description: 'Ignore existing releases'
-        required: true
-        type: 'boolean'
-        default: 'true'
-      download_existing:
-        description: 'Download instead of building'
-        required: true
-        type: 'boolean'
-        default: 'false'
+      manual_url:
+        description: 'URL to manual package download'
+        required: false
+        type: string
   schedule:
     - cron: "0 0 * * *"
 
@@ -30,6 +24,7 @@ jobs:
       items: ${{ steps.items.outputs.items }}
     steps:
     - name: Download Release file
+      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.manual_url == '' }}
       uses: nick-fields/retry@v3
       with:
         timeout_minutes: 3
@@ -37,6 +32,7 @@ jobs:
         command: curl -fL -o Release "${{ env.REPOSITORY_URL }}/dists/${{ env.REPOSITORY_DIST }}/Release"
         
     - name: Parse package sources
+      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.manual_url == '' }}
       run: |
         grep -Eo '[^ ]+/Packages' Release | sort | uniq > Sources
         [ -s "Sources" ] || ( echo "Sources not found" >&2; exit 1 )
@@ -44,6 +40,7 @@ jobs:
         cat Sources
         
     - name: Download package sources
+      if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.manual_url == '' }}
       uses: nick-fields/retry@v3
       with:
         timeout_minutes: 3
@@ -53,8 +50,13 @@ jobs:
     - name: Store package items
       id: items
       run: |
-        # Capture the output of the grep command
-        DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages | sort | uniq)
+        if [ -f "Packages" ]; then
+          # Capture the output of the grep command
+          DEB_LINKS=$(grep -oE '[^ ]+${{ env.PACKAGE_NAME }}[^ ]+\.deb' Packages | sort | uniq)
+        else
+          # Use the manual URL if provided
+          DEB_LINKS="${{ github.event.inputs.manual_url }}"
+        fi
 
         # Convert the output to a JSON array
         DEB_LINKS_JSON=$(echo "$DEB_LINKS" | jq -R -s -c 'split("\n") | map(select(length > 0) | {path: ., file: (split("/") | last)})')
@@ -83,32 +85,18 @@ jobs:
           echo "artifact=file-$(echo "${{ matrix.item.file }}" | sha256sum | cut -d' ' -f1)"
         ) >> $GITHUB_OUTPUT
 
-    - name: Check if release upload already exists
-      id: check
+    - name: Create upload directory
       run: |
-        url="${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/${{ matrix.item.file }}"
-        echo "url=${url}" >> $GITHUB_OUTPUT
+        mkdir -p artifacts
 
-        if curl -fLIZ "${url}" "${url}.sha256"; then
-          echo "Release already exists and is uploaded"
-          echo "exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "Release does not exist or is incomplete"
-          echo "exists=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Download instead of building
-      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing == 'false' && github.event.inputs.download_existing != 'false' && steps.check.outputs.exists == 'true' }}
-      id: latest
-      uses: nick-fields/retry@v3
+    - name: Check if release exists
+      id: check
+      uses: insightsengineering/release-existence-action
       with:
-        timeout_minutes: 3
-        max_attempts: 5
-        command: |
-          curl -fL -o "${{ matrix.item.file }}" "${{ steps.check.outputs.url }}" && touch "${{ matrix.item.file }}.downloaded"
+        release-tag: ${{ steps.vars.outputs.tag }}
 
     - name: Download package from repository
-      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing != 'false') || steps.check.outputs.exists == 'false' }}
+      if: ${{ steps.check.outputs.release-exists == 'false' }}
       id: download
       uses: nick-fields/retry@v3
       with:
@@ -116,8 +104,8 @@ jobs:
         max_attempts: 5
         command: curl -fL -o "${{ matrix.item.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.item.path }}"
 
-    - name: Rebuild package
-      id: rebuild
+    - name: Rebuild package for Debian
+      id: rebuild_deb
       if: ${{ steps.download.outcome == 'success' }}
       run: |
         echo "::group::Extract package contents to a temporary directory"
@@ -152,15 +140,60 @@ jobs:
         echo "::endgroup::"
         
         echo "::group::Prepare output files"
-        dpkg -b "$path" "${{ matrix.item.file }}"
+        dpkg -b "$path" "artifacts/${{ matrix.item.file }}"
+        echo "::endgroup::"
+
+        echo "::group::Cleanup temporary files"
+        rm -rf "$path"
+        echo "::endgroup::"
+
+    - name: Rebuild package for RPM
+      id: rebuild_rpm
+      if: ${{ steps.rebuild_deb.outcome == 'success' }}
+      run: |
+        echo "::group::Install alien package conversion utility"
+        sudo apt-get update && sudo apt-get install -y alien
+        echo "::endgroup::"
+
+        echo "::group::Extract package contents to a temporary directory"
+        path=$(readlink -f ${{ github.workspace }}/unpacked)
+        mkdir -p "$path"
+        (
+          cd "$path"
+          sudo alien \
+            --verbose \
+            --keep-version \
+            --to-rpm \
+            --single \
+            --scripts \
+            "artifacts/${{ matrix.item.file }}"
+        ) || exit 1
+        echo "::endgroup::"
+
+        echo "::group::Rebuild package with dependency patch applied"
+        (
+          cd $(find "$path" -mindepth 1 -maxdepth 1 -type d -print -quit) && \
+          rpmbuild \
+            --buildroot "$(pwd)" \
+            --bb "$(find . -mindepth 1 -maxdepth 1 -type f -name '*.spec' -print -quit)" \
+            --define '__requires_exclude ^libc\\.so\\.6\\(GLIBC_PRIVATE\\)\\(64bit\\)$'
+        ) ||
+        echo "::endgroup::"
+
+        echo "::group::Prepare output files"
+        mv "$(find "$path" -mindepth 1 -maxdepth 1 -type f -name '*.rpm')" "artifacts/"
+        echo "::endgroup::"
+
+        echo "::group::Cleanup temporary files"
+        rm -rf "$path"
         echo "::endgroup::"
 
     - name: Upload artifacts
-      if: ${{ steps.download.outcome == 'success' || steps.latest.outcome == 'success' }}
+      if: ${{ steps.download.outcome == 'success' }}
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.vars.outputs.artifact }}
-        path: "${{ matrix.item.file }}*"
+        path: "artifacts/*"
 
 
   define-upload-matrix:
@@ -178,7 +211,11 @@ jobs:
       - name: List .deb files and extract versions
         id: extract
         run: |
+          # Make sure the release and artifacts dirs exists (for ls)
           mkdir -p release
+          mkdir -p artifacts
+          
+          # Function to copy files to release directory
           release() {
             echo "::group::Copy $1 to release/$2/$3"
             mkdir -p "release/$2"
@@ -186,19 +223,27 @@ jobs:
             (cd "release/$2" && sha256sum "$3" > "$3.sha256")
             echo "::endgroup::"
           }
-          for file in $(find artifacts -name "*.deb"); do
-            # Extract the version using basename and cut
-            filename=$(basename "$file")
-            version="$(echo "$filename" | rev | cut -d'_' -f2 | rev)"
 
-            # Release version only if not downloaded already
-            if [ ! -e "${file}.downloaded" ]; then
-              release "$file" "$version" "$filename"
+          # Move packages into release directory
+          for file in $(find artifacts -mindepth 2 -type f); do
+            filename=$(basename "$file")
+            if [[ "$filename" == *".deb" ]]; then
+              version="$(dpkg --info "$file" | grep Version: | cut -d':' -f2 | xargs echo -n)"
+              architecture="$(dpkg --info "$file" | grep Architecture: | cut -d':' -f2 | xargs echo -n)"
+              extension=deb
+            elif [[ "$filename" == *".rpm" ]]; then
+              version="$(rpm -qp --qf '%{VERSION}' "$file")"
+              extension=rpm
+            else
+              echo "Unknown file encountered: $filename" >&2
+              exit 1
             fi
 
-            # Release latest regardless
-            release "$file" "${{ env.PERMANENT_RELEASE }}" "${filename/_${version}_/_latest_}"
+            release "$file" "$version" "$filename"
+            release "$file" "latest" "${{ env.PACKAGE_NAME }}.${architecture}.${extension}"
           done
+
+          # Generate versions list
           echo "versions=$(ls release | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
 
       - name: Upload artifacts
@@ -227,7 +272,7 @@ jobs:
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ env.PACKAGE_NAME }}-${{ matrix.version }}"
+          tag_name: "${{ matrix.version }}"
           files: "release/${{ matrix.version }}/*"
           make_latest: ${{ matrix.version == env.PERMANENT_RELEASE }}
           prerelease: ${{ matrix.version != env.PERMANENT_RELEASE }}
@@ -262,14 +307,15 @@ jobs:
         run: |
           echo "architectures<<EOF" >> $GITHUB_OUTPUT
           for file in release/*.deb; do
-              echo "${file//.deb}" | rev | cut -d'_' -f1 | rev
+              echo "${file//.deb}" | rev | cut -d'.' -f1 | rev
           done | sort | uniq >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           echo "public<<EOF" >> $GITHUB_OUTPUT
           cat release/public.key >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
           
-      - uses: smeinecke/apt-repo-action@v2.1.4
+      - name: Generate Debian repository index
+        uses: smeinecke/apt-repo-action@v2.1.4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           repo_supported_arch: ${{ steps.data.outputs.architectures }}
