@@ -245,10 +245,11 @@ jobs:
           
           # Function to copy files to release directory
           release() {
-            echo "::group::Copy $1 to release/$2/$3"
-            mkdir -p "release/$2"
-            cp "$1" "release/$2/$3"
-            (cd "release/$2" && sha256sum "$3" > "$3.sha256")
+            dir="${{ env.PACKAGE_NAME }}/release"
+            echo "::group::Copy $1 to $dir/$2/$3"
+            mkdir -p "$dir/$2"
+            cp "$1" "$dir/$2/$3"
+            (cd "$dir/$2" && sha256sum "$3" > "$3.sha256")
             echo "::endgroup::"
           }
 
