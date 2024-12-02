@@ -246,6 +246,7 @@ jobs:
               extension=deb
             elif [[ "$filename" == *".rpm" ]]; then
               version="$(rpm -qp --qf '%{VERSION}' "$file")"
+              architecture="$(rpm -qp --qf '%{ARCH}' "$file")"
               extension=rpm
             else
               echo "Unknown file encountered: $filename" >&2
