@@ -91,7 +91,7 @@ jobs:
 
     - name: Check if release exists
       id: check
-      uses: insightsengineering/release-existence-action
+      uses: insightsengineering/release-existence-action@main
       with:
         release-tag: ${{ steps.vars.outputs.tag }}
 
