@@ -115,7 +115,12 @@ jobs:
       with:
         timeout_minutes: 3
         max_attempts: 5
-        command: curl -fL -o "${{ matrix.item.file }}" "${{ env.REPOSITORY_URL }}/${{ matrix.item.path }}"
+        command: |
+          url="${{ matrix.item.path }}"
+          if [[ "${{ matrix.item.path }}" != *"://"* ]]; then
+            url="${{ env.REPOSITORY_URL }}/$url"
+          fi
+          curl -fL -o "${{ matrix.item.file }}" "$url"
 
     - name: Rebuild package for Debian
       id: rebuild_deb
