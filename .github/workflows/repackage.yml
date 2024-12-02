@@ -7,6 +7,11 @@ on:
         description: 'URL to manual package download'
         required: false
         type: string
+      ignore_existing:
+        description: 'Ignore existing releases'
+        required: true
+        type: boolean
+        default: false
   schedule:
     - cron: "0 0 * * *"
 
@@ -91,12 +96,13 @@ jobs:
 
     - name: Check if release exists
       id: check
+      if: ${{ github.event_name != 'workflow_dispatch' || !github.event.inputs.ignore_existing }}
       uses: insightsengineering/release-existence-action@main
       with:
         release-tag: ${{ steps.vars.outputs.tag }}
 
     - name: Download package from repository
-      if: ${{ steps.check.outputs.release-exists == 'false' }}
+      if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.ignore_existing) || steps.check.outputs.release-exists == 'false' }}
       id: download
       uses: nick-fields/retry@v3
       with:
