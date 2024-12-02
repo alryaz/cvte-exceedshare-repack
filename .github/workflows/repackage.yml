@@ -148,7 +148,7 @@ jobs:
         # Check if update-desktop-database trigger is present
         if ! grep -q "update-desktop-database" "$path/DEBIAN/postinst"; then
             echo "Adding trigger to update desktop links database"
-            echo 'dpkg-trigger update-desktop-database' >> "$path/DEBIAN/postinst"
+            echo 'dpkg-trigger update-desktop-database || echo "dpkg-trigger failed (likely not supported)" >&2' >> "$path/DEBIAN/postinst"
         fi
         echo "::endgroup::"
         
